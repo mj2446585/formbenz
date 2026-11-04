@@ -865,9 +865,19 @@
       });
     }
 
-    function applyAutoNumbering(htmlStr, numState) {
+function applyAutoNumbering(htmlStr, numState) {
       if (!htmlStr) return '';
 
+      // [추가] 캘린더 날짜 변수({{clm_con_date}} 등)가 포함된 문단이나 중앙 정렬된 문단은 넘버링 예외 처리
+      if (htmlStr.includes('{{clm_con_date}}') || htmlStr.includes('text-align: center')) {
+        return htmlStr; 
+      }
+
+      let normalized = htmlStr.replace(
+        /<br\s*\/?>\s*(?=(?:<(?:strong|b|span)[^>]*>\s*)*(?:\d+\.|[가-하]\s*\.|\(\d+\)|\d+\))(?:\s|&nbsp;))/gi,
+        '</p><p>'
+      );
+      
       let normalized = htmlStr.replace(
         /<br\s*\/?>\s*(?=(?:<(?:strong|b|span)[^>]*>\s*)*(?:\d+\.|[가-하]\s*\.|\(\d+\)|\d+\))(?:\s|&nbsp;))/gi,
         '</p><p>'
