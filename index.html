@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LawForm CLM - 계약서 자동생성 및 권한관리 시스템</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=Noto+Serif+KR:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans KR', sans-serif; background-color: #f1f5f9; margin: 0; }
+    .doc-preview {
+      font-family: 'Noto Serif KR', '바탕', serif;
+      width: 210mm;
+      min-height: 297mm;
+      padding: 20mm;
+      margin: 0 auto;
+      background: white;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+      color: #111827;
+      line-height: 1.75;
+      font-size: 10.5pt;
+      word-break: keep-all;
+      box-sizing: border-box;
+    }
+    .doc-preview p { margin-bottom: 6px; }
+
+    /* outputTitle 전용 스타일: 중앙 정렬 + 20pt + 굵게 */
+    .doc-preview .doc-output-title {
+      text-align: center;
+      font-size: 20pt;
+      font-weight: 700;
+      margin-bottom: 24px;
+      line-height: 1.4;
+    }
+
+    /* (1) 조항(provision_title) 간격 20px 설정 */
+    .doc-preview .provision-block {
+      margin-top: 20px;
+    }
+    .doc-preview .provision-header {
+      font-weight: 700;
+      margin-top: 20px;
+      margin-bottom: 4px;
+      font-size: 11pt;
+    }
+
+    /* =====================================================================
+       [직접 수정 가능] 넘버링 위계별 들여쓰기(마진) 설정
+       - margin-left 값을 원하는 px 또는 pt 단위로 수정하시면 바로 반영됩니다.
+       ===================================================================== */
+    .doc-preview .indent-level-1 { margin-left: 0px;  padding-left: 18px; text-indent: -18px; } /* 1단계: 1. */
+    .doc-preview .indent-level-2 { margin-left: 16px; padding-left: 18px; text-indent: -18px; } /* 2단계: 가. */
+    .doc-preview .indent-level-3 { margin-left: 32px; padding-left: 22px; text-indent: -22px; } /* 3단계: (1) */
+    .doc-preview .indent-level-4 { margin-left: 48px; padding-left: 18px; text-indent: -18px; } /* 4단계: 1) */
+    .doc-preview .indent-level-5 { margin-left: 64px; padding-left: 20px; text-indent: -20px; } /* 5단계(확장용) */
+
+    /* 페이지 넘김 (page-break / {{page_brake}}) 스타일 */
+    .doc-preview .page-break {
+      page-break-before: always;
+      break-before: page;
+      border-top: 2px dashed #cbd5e1;
+      margin-top: 32px;
+      padding-top: 24px;
+    }
+
+    /* 형광펜 및 실시간 입력 포커싱 하이라이트 스타일 */
+    .filled-var {
+      background-color: #fef08a;
+      padding: 0 3px;
+      border-radius: 2px;
+      transition: all 0.2s ease;
+    }
+    .empty-var {
+      color: #9ca3af;
+      border-bottom: 1px dashed #9ca3af;
+      padding: 0 4px;
+      transition: all 0.2s ease;
+    }
+    .active-focus-var {
+      background-color: #fde047 !important;
+      color: #111827 !important;
+      outline: 2px solid #f97316;
+      box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.25);
+      border-radius: 3px;
+      font-weight: 600;
+    }
+
+    @media print {
+      body { background: white; }
+      .no-print { display: none !important; }
+      .print-container { width: 100% !important; height: auto !important; overflow: visible !important; padding: 0 !important; margin: 0 !important; }
+      .doc-preview { box-shadow: none; padding: 12mm; width: 100%; min-height: auto; }
+      .doc-preview .page-break { border-top: none; margin-top: 0; padding-top: 0; }
+      .filled-var { background-color: transparent !important; padding: 0; }
+      .empty-var { color: #111827; border-bottom: none; }
+      .active-focus-var { background-color: transparent !important; outline: none !important; box-shadow: none !important; font-weight: inherit; }
+    }
+  </style>
+</head>
+<body class="h-screen flex flex-
