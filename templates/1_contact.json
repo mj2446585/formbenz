@@ -1,0 +1,249 @@
+{
+  "title": "클루커스 클라우드 서비스 공급계약서 (Azure)",
+  "accessLevel": "public",
+  "accessPassword": "",
+  "inputSections": [
+    {
+      "title": "계약 기본 정보",
+      "fields": [
+        {
+          "fieldtype": "obj",
+          "objdataFields": [
+            {
+              "type": "text",
+              "textFields": [
+                {
+                  "binding": "cust_name",
+                  "placeholder": "고객사 상호명 입력",
+                  "immovableLeftText": "고객사 상호명"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "textFields": [
+                {
+                  "binding": "sign_date",
+                  "placeholder": "2026. 11. 04.",
+                  "immovableLeftText": "서명일"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "클라우드 서비스 벤더 선택",
+      "fields": [
+        {
+          "fieldtype": "obj",
+          "objdataFields": [
+            {
+              "type": "radio",
+              "radioBinding": "vendor_choice",
+              "radioFields": [
+                { "content": "Microsoft CSP Azure" },
+                { "content": "Google Cloud Platform" },
+                { "content": "Naver Cloud Platform" }
+              ],
+              "radioDirection": "right"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "계약기간 및 자동연장",
+      "fields": [
+        {
+          "fieldtype": "obj",
+          "objdataFields": [
+            {
+              "type": "text",
+              "textFields": [
+                {
+                  "binding": "start_date",
+                  "placeholder": "2026. 11. 01.",
+                  "immovableLeftText": "계약시작일"
+                },
+                {
+                  "binding": "end_date",
+                  "placeholder": "2027. 10. 31.",
+                  "immovableLeftText": "계약종료일"
+                }
+              ]
+            },
+            {
+              "type": "radio",
+              "radioBinding": "auto_renew",
+              "radioFields": [
+                { "content": "자동연장 함" },
+                { "content": "자동연장 하지 않음" }
+              ],
+              "radioDirection": "right"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "고객사 구분 (법인 / 개인사업자)",
+      "fields": [
+        {
+          "fieldtype": "obj",
+          "objdataFields": [
+            {
+              "type": "radio",
+              "radioBinding": "cust_type",
+              "radioFields": [
+                { "content": "법인" },
+                { "content": "개인사업자" }
+              ],
+              "radioDirection": "right"
+            }
+          ]
+        },
+        {
+          "casetype": "AND",
+          "caseFields": [{ "bool": "true", "name": "cust_type", "value": "법인" }],
+          "objdataFields": [
+            {
+              "type": "text",
+              "textFields": [
+                {
+                  "binding": "ceo_name",
+                  "placeholder": "대표이사 성명 입력",
+                  "immovableLeftText": "대표이사 성명"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "casetype": "AND",
+          "caseFields": [{ "bool": "true", "name": "cust_type", "value": "개인사업자" }],
+          "objdataFields": [
+            {
+              "type": "text",
+              "textFields": [
+                {
+                  "binding": "ceo_name",
+                  "placeholder": "대표자 성명 입력",
+                  "immovableLeftText": "대표자 성명"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "fieldtype": "obj",
+          "objdataFields": [
+            {
+              "type": "address",
+              "addressBinding": "cust_addr1",
+              "addressDetailBinding": "cust_addr2"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "outputSections": [
+    {
+      "law_text": "<p style='text-align: center;'><strong><span style='font-size: 18px;'>클라우드 서비스 계약서 (Azure)</span></strong></p><p>&nbsp;</p>"
+    },
+    {
+      "law_text": "<p>고객사 : <strong>{{cust_name}}</strong></p><p>공급자 : (주)클루커스</p><p>서명일 : {{sign_date}}</p><p>&nbsp;</p>"
+    },
+    {
+      "law_text": "<p><strong>{{cust_name}}</strong>(이하 “고객사”라고 함)과 (주)클루커스(이하 “공급자”라고 함)는 “클라우드 서비스”에 관한 계약을 다음과 같이 체결한다.</p>"
+    },
+    {
+      "provision_title": "목적",
+      "law_text": "<p>이 계약은 “공급자”가 “고객사”에게 “클라우드 서비스”를 제공하고 “고객사”는 “클라우드 서비스”를 이용함으로써 발생하는 각각의 권리와 의무 및 그 밖에 필요한 사항을 정함에 그 목적이 있다.</p>"
+    },
+    {
+      "provision_title": "용어의 정의",
+      "law_text": "<p>이 계약에서 사용하는 용어의 뜻은 다음과 같다.</p><p>1. “클라우드 서비스”란 소프트웨어인 <strong>{{vendor_choice}}</strong>의 공급과 이용 등의 서비스를 말한다.</p><p>2. “고객사”란 “클라우드 서비스”를 이용하는 사업자를 말한다.</p><p>3. “공급자”란 “클라우드 서비스”를 제공하는 사업자를 말한다.</p><p>4. “사용량”이란 별첨1에 기재된 범위 내에서 사용된 “클라우드 서비스”의 총사용량을 말한다.</p><p>5. “품질보증기준”이란 <strong>{{vendor_short}}</strong>가 제공하는 SLA(Service Level Agreement) 기준을 말한다.</p>"
+    },
+    {
+      "provision_title": "서비스 제공범위",
+      "law_text": "<p>이 계약에 의하여 “공급자”가 “고객사”에게 제공하는 “클라우드 서비스”의 범위는 별첨1[발주요청서]에 기하여 확정된 범위로 한정하며, 추가적인 서비스의 범위는 당사자의 합의로 변경될 수 있다.</p>"
+    },
+    {
+      "provision_title": "대금과 제공내역",
+      "law_text": "<p>1. 이 계약에 의하여 “고객사”가 “공급자”에게 지급할 대금은 월 단위 이용(또는 주문) 금액에 따른다.</p><p>2. “클라우드 서비스” 제공 내역은 별첨1 [발주요청서]에 따르며 매월 청구되는 대금의 산정은 전월의 실제 사용량(또는 주문량)을 기준으로 한다.</p>"
+    },
+    {
+      "provision_title": "대금지급의무",
+      "law_text": "<p>1. “공급자”는 해당 월의 서비스 이용요금을 다음 월에 “고객사”에게 세금계산서를 발행하여 청구하며, “고객사”는 청구일로부터 30일 이내에 “공급자”에게 현금으로 지급한다.</p><p>2. “고객사”가 대금지급을 연체하는 경우 연체대금에 대하여 연 12%의 비율에 의한 지연이자를 “공급자”에게 지급하여야 한다.</p><p>3. “고객사”가 대금지급을 연체하는 경우, “공급자”는 상당한 기간을 정하여 최고하고 서비스의 공급을 정지할 수 있으며, 본 조에 따른 대금지급의무를 2회 이상 위반한 경우 서면 통지 후 즉시 계약을 해지할 수 있다.</p><p>4. “공급자”는 대금을 연체한 “고객사”에 대하여 연체대금을 변제 받기 위하여 신용정보회사에 채권추심의 절차를 의뢰할 수 있으며 이로 인하여 발생한 경비는 “고객사”에게 청구된다.</p><p>5. 서비스 개시일 또는 종료일이 월의 중도인 경우는 사용금액을 일할 계산으로 산정한다.</p>"
+    },
+    {
+      "provision_title": "계약기간",
+      "law_text": "<p>이 계약의 기간은 <strong>{{start_date}}</strong>부터 <strong>{{end_date}}</strong>까지로 한다.</p>"
+    },
+    {
+      "caseFields": [{ "name": "auto_renew", "value": "자동연장 함" }],
+      "provision_title": "계약기간 자동연장",
+      "law_text": "<p>제1항의 기간이 만료된 경우 당사자의 문서(전자문서 포함)에 의한 명시적인 계약종료의사가 없으면 이 계약은 1년간 동일한 조건으로 자동으로 연장된다.</p>"
+    },
+    {
+      "provision_title": "서비스 품질",
+      "law_text": "<p>1. “공급자”가 “고객사”에게 제공하는 “클라우드 서비스” 품질은 <strong>{{vendor_short}}</strong>가 제공하는 품질보증(SLA) 기준으로 한다.</p><p>2. 무상으로 “공급자”가 제공하는 별도의 서비스는 “공급자”의 자체적인 서비스 품질로 보증한다.</p><p>3. <strong>{{vendor_short}}</strong>의 귀책으로 서비스가 중단되거나 장애가 발생하는 경우 “공급자”는 정보 입수 즉시 “고객사”에게 장애의 종류를 통보하여 대응할 수 있도록 지원한다.</p>"
+    },
+    {
+      "provision_title": "고객 계약 동의",
+      "law_text": "<p>1. “공급자”가 “고객사”에게 제공하는 <strong>{{vendor_choice}}</strong> 고객 계약에 동의하고, 담당자 정보 등을 제공하여야 한다.</p><p>2. 해당 이용 약관의 내용은 별첨2와 같다.</p>"
+    },
+    {
+      "provision_title": "비밀유지",
+      "law_text": "<p>당사자는 상대방의 영업비밀, 기술정보, 고객정보 및 이를 바탕으로 생성된 정보를 계약목적 범위에서 최소한으로 이용하여야 하고, 상대방 동의 없이 제3자에게 제공하거나 침해행위를 하여서는 안 된다.</p>"
+    },
+    {
+      "provision_title": "지식재산권, 정보이용 등",
+      "law_text": "<p>1. “클라우드 서비스”와 관련된 프로그램, 자료, 기술에 관한 일체의 권리 및 지식재산권은 “공급자”에게 있으며, “고객사”는 이를 보호하여야 한다.</p><p>2. “공급자”는 청구서 발송 및 서비스 품질 향상 등의 목적으로 “고객사”의 회사명 및 식별정보를 수집하고 이용할 수 있다.</p><p>3. 정보보호와 정보시스템 안정의 최종 책임은 “고객사”에게 있다.</p>"
+    },
+    {
+      "provision_title": "양도금지",
+      "law_text": "<p>쌍방 당사자는 이 계약상의 권리와 의무를 다른 당사자의 사전 동의 없이 제3자에게 위임하거나 양도할 수 없다.</p>"
+    },
+    {
+      "provision_title": "계약의 해지 및 손해배상",
+      "law_text": "<p>일방당사자는 상대방이 신용위험, 허위서류 제출, 의무 위반 등의 사유가 발생하는 경우 서면 통보로써 이 계약을 해지할 수 있다.</p>"
+    },
+    {
+      "provision_title": "계약의 변경 및 효력",
+      "law_text": "<p>별첨1 [발주요청서]에 기재된 제품과 수량의 변경은 서면(전자문서 포함)으로 하여야 한다.</p>"
+    },
+    {
+      "provision_title": "불가항력",
+      "law_text": "<p>천재지변 등 통제할 수 없는 부득이한 사유에 의하여 계약을 이행할 수 없는 경우 쌍방 당사자는 채무불이행 책임을 지지 않는다.</p>"
+    },
+    {
+      "provision_title": "부정행위금지",
+      "law_text": "<p>“공급자”는 “고객사”의 임직원에게 금품이나 그 밖의 이익을 제의·약속·제공하여서는 안 된다.</p>"
+    },
+    {
+      "provision_title": "합의관할",
+      "law_text": "<p>이 계약과 관련하여 발생하는 일체의 분쟁에 대한 소송은 서울중앙지방법원을 제1심 전속 합의관할로 한다.</p><p>&nbsp;</p>"
+    },
+    {
+      "law_text": "<p style='text-align: center;'>{{sign_date}}</p><p>&nbsp;</p>"
+    },
+    {
+      "padding_top": 20,
+      "law_text": "<p><strong>고객사</strong></p><p>{{cust_name}}</p><p>{{cust_addr1}} {{cust_addr2}}</p><p>{{ceo_name}} (인)</p>"
+    },
+    {
+      "padding_top": 20,
+      "law_text": "<p><strong>공급자</strong></p><p>(주)클루커스</p><p>서울특별시 강남구 논현로 75길 6(역삼동, 에비뉴75)</p><p>대표이사 : 홍 성 완 (인)</p>"
+    }
+  ],
+  "variables": [
+    {
+      "name": "vendor_short",
+      "value": "<switch binding=\"vendor_choice\" case1=\"Microsoft CSP Azure\" value1=\"Microsoft\" case2=\"Google Cloud Platform\" value2=\"Google\" case3=\"Naver Cloud Platform\" value3=\"Naver\"></switch>"
+    }
+  ]
+}
