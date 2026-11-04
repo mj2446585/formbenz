@@ -35,7 +35,7 @@
                     "hasExplainTooltip": "false",
                     "objdataFieldCount": "1",
                     "title": "회사명"
-                },
+                }
             ],
             "fieldCount": "4",
             "guidetooltip": "",
@@ -538,14 +538,4 @@
             "law_text": "<p><strong>\"클루커스\"</strong></p>\n<p>서울특별시 강남구 논현로75길 6</p>\n<p>주식회사 클루커스</p>\n<p>대표이사 홍성완 (인)</p>",
             "padding_top": 14,
             "caseCount": "1",
-            "caseFields": [
-                {
-                    "name": "name1"
-                }
-            ]
-        }
-    ],
-    "variables": [
-        {}
-    ]
-}
+            "
