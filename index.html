@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LawForm CLM - 계약서 자동생성 및 권한관리 시스템</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=Noto+Serif+KR:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans KR', sans-serif; background-color: #f1f5f9; margin: 0; }
+    .doc-preview {
+      font-family: 'Noto Serif KR', '바탕', serif;
+      width: 210mm;
+      min-height: 297mm;
+      padding: 20mm;
+      margin: 0 auto;
+      background: white;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+      color: #111827;
+      line-height: 1.75;
+      font-size: 10.5pt;
+      word-break: keep-all;
+      box-sizing: border-box;
+    }
+    .doc-preview p { margin-bottom: 6px; }
+
+    /* outputTitle 전용 스타일: 중앙 정렬 + 20pt + 굵게 */
+    .doc-preview .doc-output-title {
+      text-align: center;
+      font-size: 20pt;
+      font-weight: 700;
+      margin-bottom: 24px;
+      line-height: 1.4;
+    }
+
+    /* 조항(provision_title) 간격 20px 설정 */
+    .doc-preview .provision-block {
+      margin-top: 20px;
+    }
+    .doc-preview .provision-header {
+      font-weight: 700;
+      margin-top: 20px;
+      margin-bottom: 4px;
+      font-size: 11pt;
+    }
+
+    /* 넘버링 위계별 들여쓰기(마진) 설정 */
+    .doc-preview .indent-level-1 { margin-left: 0px;  padding-left: 18px; text-indent: -18px; }
+    .doc-preview .indent-level-2 { margin-left: 16px; padding-left: 18px; text-indent: -18px; }
+    .doc-preview .indent-level-3 { margin-left: 32px; padding-left: 22px; text-indent: -22px; }
+    .doc-preview .indent-level-4 { margin-left: 48px; padding-left: 18px; text-indent: -18px; }
+    .doc-preview .indent-level-5 { margin-left: 64px; padding-left: 20px; text-indent: -20px; }
+
+    /* 페이지 넘김 스타일 */
+    .doc-preview .page-break {
+      page-break-before: always;
+      break-before: page;
+      border-top: 2px dashed #cbd5e1;
+      margin-top: 32px;
+      padding-top: 24px;
+    }
+
+    /* 형광펜 및 포커싱 스타일 */
+    .filled-var {
+      background-color: #fef08a;
+      padding: 0 3px;
+      border-radius: 2px;
+      transition: all 0.2s ease;
+    }
+    .empty-var {
+      color: #9ca3af;
+      border-bottom: 1px dashed #9ca3af;
+      padding: 0 4px;
+      transition: all 0.2s ease;
+    }
+    .active-focus-var {
+      background-color: #fde047 !important;
+      color: #111827 !important;
+      outline: 2px solid #f97316;
+      box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.25);
+      border-radius: 3px;
+      font-weight: 600;
+    }
+
+    @media print {
+      body { background: white; }
+      .no-print { display: none !important; }
+      .print-container { width: 100% !important; height: auto !important; overflow: visible !important; padding: 0 !important; margin: 0 !important; }
+      .doc-preview { box-shadow: none; padding: 12mm; width: 100%; min-height: auto; }
+      .doc-preview .page-break { border-top: none; margin-top: 0; padding-top: 0; }
+      .filled-var { background-color: transparent !important; padding: 0; }
+      .empty-var { color: #111827; border-bottom: none; }
+      .active-focus-var { background-color: transparent !important; outline: none !important; box-shadow: none !important; font-weight: inherit; }
+    }
+  </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+  <!-- 상단 네비게이션 -->
+  <header class="no-print bg-slate-900 text-white px-6 py-3 flex items-center justify-between shadow-md z-10">
+    <div class="flex items-center space-x-3">
+      <div class="flex items-center space-x-2">
+        <span class="bg-indigo-600 text-white font-bold px-2.5 py-1 rounded text-sm">CLM</span>
+        <h1 class="text-base font-bold tracking-tight hidden sm:block">법률 문서 자동생성 시스템</h1>
+      </div>
+      <select id="templateSelect" onchange="selectTemplate(this.value)" class="bg-slate-800 border border-slate-700 text-sm rounded-lg px-3 py-1.5 text-white focus:outline-none max-w-xs">
+      </select>
+      <button onclick="syncExternalTemplates(true)" title="templates 폴더에서 양식 다시 불러오기" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 px-2.5 py-1.5 rounded-lg text-xs font-medium transition">
+        🔄 DB 동기화
+      </button>
+      <button onclick="deleteCurrentTemplate()" title="현재 선택된 양식 삭제" class="bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 px-2.5 py-1.5 rounded-lg text-xs font-medium transition">
+        🗑️ 삭제
+      </button>
+    </div>
+
+    <div class="flex items-center space-x-2">
+      <button onclick="openManagerModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center space-x-1">
+        <span>⚙️ 양식 및 권한 관리</span>
+      </button>
+      <button onclick="toggleAdminMode()" id="adminModeBtn" class="bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium transition">
+        🔒 관리자 OFF
+      </button>
+      <label class="cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center space-x-1 shadow-sm">
+        <span>📂 양식 추가</span>
+        <input type="file" id="fileInput" accept=".json,.txt" multiple class="hidden" onchange="handleFiles(this.files)">
+      </label>
+      <button onclick="toggleHighlight()" id="highlightBtn" class="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-600 px-2.5 py-1.5 rounded-lg text-xs font-medium transition">
+        ✨ 형광펜 ON
+      </button>
+      <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition shadow-sm">
+        🖨️ PDF/인쇄
+      </button>
+      <button onclick="exportWord()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition shadow-sm">
+        📄 Word 저장
+      </button>
+    </div>
+  </header>
+
+  <!-- 드래그 앤 드롭 안내 배너 -->
+  <div id="dropZone" class="no-print bg-indigo-50 border-b border-indigo-200 px-6 py-2 text-xs text-indigo-800 flex items-center justify-between">
+    <span>💡 <strong>.txt / .json 양식 파일</strong>을 끌어다 놓거나, GitHub의 <code>./templates/</code> 폴더에 넣으면 코드 수정 시에도 양식이 영구 보존됩니다.</span>
+    <span id="accessBadge" class="px-2 py-0.5 rounded font-semibold text-[11px] bg-emerald-100 text-emerald-800">전체 공개 문서</span>
+  </div>
+
+  <!-- 메인 작업 공간 -->
+  <main class="flex-1 flex overflow-hidden relative">
+    <!-- 권한 잠금 오버레이 -->
+    <div id="lockOverlay" class="hidden no-print absolute inset-0 bg-slate-900/80 backdrop-blur-sm z-20 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 text-center border border-slate-200">
+        <div class="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-3 text-2xl">🔐</div>
+        <h3 id="lockTitle" class="text-lg font-bold text-slate-800">보호된 문서입니다</h3>
+        <p class="text-xs text-slate-500 mt-1 mb-4">이 양식을 열람하고 작성하려면 설정된 접근 비밀번호를 입력해주세요.</p>
+        <div class="flex space-x-2">
+          <input type="password" id="unlockPasswordInput" onkeydown="if(event.key==='Enter') verifyDocumentPassword()" placeholder="문서 비밀번호 입력" class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <button onclick="verifyDocumentPassword()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">잠금 해제</button>
+        </div>
+        <p id="lockErrorMsg" class="text-xs text-rose-600 mt-2 hidden">비밀번호가 일치하지 않습니다.</p>
+      </div>
+    </div>
+
+    <!-- 좌측 동적 입력 패널 -->
+    <aside class="no-print w-5/12 max-w-xl bg-white border-r border-slate-200 flex flex-col h-full">
+      <div class="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div>
+          <h2 id="formTitle" class="font-bold text-slate-800 text-base">양식을 선택해주세요</h2>
+          <p class="text-xs text-slate-500 mt-0.5">선택 옵션에 따라 하위 질문과 계약서 본문이 실시간 변경됩니다.</p>
+        </div>
+        <button onclick="clearCurrentInputs()" class="text-xs text-slate-600 hover:text-red-600 border border-slate-300 rounded px-2.5 py-1 bg-white">
+          입력값 리셋
+        </button>
+      </div>
+      <div id="inputContainer" class="flex-1 overflow-y-auto p-5 space-y-4"></div>
+    </aside>
+
+    <!-- 우측 실시간 A4 미리보기 패널 -->
+    <section id="previewScrollContainer" class="print-container flex-1 overflow-y-auto p-8 bg-slate-200">
+      <div id="documentPreview" class="doc-preview"></div>
+    </section>
+  </main>
+
+  <!-- 양식 및 접근권한 관리 모달 -->
+  <div id="managerModal" class="hidden no-print fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-30 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200">
+      <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+        <div>
+          <h3 class="font-bold text-base">⚙️ 양식 목록 및 문서별 접근 권한 관리</h3>
+          <p class="text-xs text-slate-400 mt-0.5">문서 삭제, 이름 변경, 비밀번호 잠금 및 개별/전체 JSON 추출이 가능합니다.</p>
+        </div>
+        <button onclick="closeManagerModal()" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+
+      <div class="p-6 overflow-y-auto flex-1 space-y-4">
+        <!-- 관리자 PIN 설정 바 -->
+        <div class="bg-slate-100 border border-slate-200 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-2">
+          <div class="text-xs text-slate-700">
+            <strong>🛡️ 마스터 관리자 PIN 번호:</strong> 관리자 모드를 켜거나 잠긴 문서를 즉시 열람할 때 사용됩니다. (초기값: <code>0000</code>)
+          </div>
+          <div class="flex items-center space-x-2">
+            <input type="password" id="adminPinInput" placeholder="새 PIN 입력" class="px-2.5 py-1 text-xs border border-slate-300 rounded bg-white w-28">
+            <button onclick="updateAdminPin()" class="bg-slate-800 hover:bg-slate-700 text-white text-xs px-3 py-1 rounded font-medium">PIN 변경</button>
+          </div>
+        </div>
+
+        <!-- 양식 리스트 테이블 -->
+        <div class="border border-slate-200 rounded-xl overflow-hidden">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                <th class="py-2.5 px-3">양식 제목</th>
+                <th class="py-2.5 px-3 w-36">접근 권한 등급</th>
+                <th class="py-2.5 px-3 w-32">열람 비밀번호</th>
+                <th class="py-2.5 px-3 w-36 text-center">관리 / 개별 추출</th>
+              </tr>
+            </thead>
+            <tbody id="managerTableBody" class="divide-y divide-slate-200"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <button onclick="exportAllTemplatesBackup()" class="text-xs bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-lg font-medium">
+            💾 전체 양식+권한 통합 백업(.json)
+          </button>
+          <button onclick="clearLocalTemplates()" class="text-xs text-rose-600 hover:underline px-2 py-1.5 font-medium">
+            브라우저 캐시 초기화 후 서버 DB 재로드
+          </button>
+        </div>
+        <button onclick="closeManagerModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-4 py-2 rounded-lg font-semibold">
+          설정 완료 및 닫기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'clm_lawform_templates_persistent_db';
+    const PIN_STORAGE_KEY = 'clm_lawform_admin_pin';
+    const EXTERNAL_MANIFEST_URL = './templates/index.json';
+
+    let templates = [];
+    let currentTemplateIndex = 0;
+    let formState = {};
+    let computedState = {};
+    let currencyBindings = new Set();
+    let highlightEnabled = true;
+    let isAdminMode = false;
+    let unlockedTemplateIndices = new Set();
+    let lastFocusedBinding = null;
+
+    const KOREAN_LIST_CHARS = [
+      '가', '나', '다', '라', '마', '바', '사', '아', '자', '차', '카', '타', '파', '하',
+      '거', '너', '더', '러', '머', '버', '서', '어', '저', '처', '커', '터', '퍼', '허'
+    ];
+
+    const NUMBERING_LEVEL_CONFIG = [
+      {
+        level: 1,
+        name: '1.',
+        regex: /^(\d+)\.(?=\s|&nbsp;)/,
+        format: (n) => `${n}.`,
+        indentClass: 'indent-level-1',
+        wordMarginPt: '0pt'
+      },
+      {
+        level: 2,
+        name: '가.',
+        regex: /^([가-하])\s*\.(?=\s|&nbsp;)/,
+        format: (n) => `${KOREAN_LIST_CHARS[(n - 1) % KOREAN_LIST_CHARS.length]}.`,
+        indentClass: 'indent-level-2',
+        wordMarginPt: '12pt'
+      },
+      {
+        level: 3,
+        name: '(1)',
+        regex: /^\((\d+)\)(?=\s|&nbsp;)/,
+        format: (n) => `(${n})`,
+        indentClass: 'indent-level-3',
+        wordMarginPt: '24pt'
+      },
+      {
+        level: 4,
+        name: '1)',
+        regex: /^(\d+)\)(?=\s|&nbsp;)/,
+        format: (n) => `${n})`,
+        indentClass: 'indent-level-4',
+        wordMarginPt: '36pt'
+      }
+    ];
+
+    function createInitialNumState() {
+      return { counts: NUMBERING_LEVEL_CONFIG.map(() => 0) };
+    }
+
+    function resetNumState(numState) {
+      if (!numState || !numState.counts) return;
+      numState.counts.fill(0);
+    }
+
+    function getAdminPin() {
+      return localStorage.getItem(PIN_STORAGE_KEY) || '0000';
+    }
+
+    function getFallbackTemplate() {
+      return {
+        title: "기본 양식 (불러오기 실패 시)",
+        outputTitle: "기본 문서 양식",
+        accessLevel: "public",
+        accessPassword: "",
+        inputSections: [
+          {
+            title: "기본 입력",
+            fields: [
+              {
+                objdataFields: [
+                  { type: "text", textFields: [{ binding: "sample_text", placeholder: "내용을 입력하세요", immovableLeftText: "제목" }] }
+                ]
+              }
+            ]
+          }
+        ],
+        outputSections: [
+          {
+            law_text: "<p>입력된 내용: {{sample_text}}</p>"
+          }
+        ],
+        variables: []
+      };
+    }
+
+    async function initApp() {
+      try {
+        const savedNew = localStorage.getItem(STORAGE_KEY);
+        const savedOld = localStorage.getItem('clm_lawform_templates_v4');
+
+        if (savedNew) {
+          try { templates = JSON.parse(savedNew); } catch (e) { templates = []; }
+        } else if (savedOld) {
+          try {
+            templates = JSON.parse(savedOld);
+            saveTemplates();
+          } catch (e) { templates = []; }
+        }
+
+        if (!Array.isArray(templates)) templates = [];
+
+        await syncExternalTemplates(false);
+
+        if (templates.length === 0) {
+          templates.push(getFallbackTemplate());
+        }
+
+        templates.forEach(t => {
+          if (!t.accessLevel) t.accessLevel = 'public';
+          if (t.accessPassword === undefined) t.accessPassword = '';
+        });
+
+        renderTemplateSelector();
+        const firstVisible = getVisibleTemplateIndices()[0];
+        if (firstVisible !== undefined) {
+          selectTemplate(firstVisible);
+        } else {
+          renderEmptyState();
+        }
+      } catch (err) {
+        console.error('초기화 중 오류 발생:', err);
+        templates = [getFallbackTemplate()];
+        renderTemplateSelector();
+        selectTemplate(0);
+      }
+      setupDragAndDrop();
+    }
+
+    async function syncExternalTemplates(showAlert = false) {
+      try {
+        const res = await fetch(`${EXTERNAL_MANIFEST_URL}?t=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) {
+          if (showAlert) alert('외부 ./templates/index.json 파일을 찾을 수 없습니다.');
+          return;
+        }
+        const manifest = await res.json();
+        const fileList = Array.isArray(manifest) ? manifest : (manifest.files || []);
+        let addedOrUpdated = 0;
+
+        for (const filePath of fileList) {
+          const fullUrl = filePath.startsWith('http') || filePath.startsWith('./') || filePath.startsWith('/')
+            ? filePath
+            : `./templates/${filePath}`;
+          try {
+            const tplRes = await fetch(`${fullUrl}?t=${Date.now()}`, { cache: 'no-store' });
+            if (!tplRes.ok) continue;
+            const tplData = await tplRes.json();
+            if (!tplData || (!tplData.inputSections && !tplData.outputSections)) continue;
+
+            if (!tplData.title) {
+              tplData.title = tplData.outputTitle || filePath.replace(/^.*[\\\/]/, '').replace(/\.(json|txt)$/i, '');
+            }
+            if (!tplData.accessLevel) tplData.accessLevel = 'public';
+            if (tplData.accessPassword === undefined) tplData.accessPassword = '';
+
+            const existingIdx = templates.findIndex(t => t.title === tplData.title);
+            if (existingIdx !== -1) {
+              const keepAccess = templates[existingIdx].accessLevel || tplData.accessLevel;
+              const keepPass = templates[existingIdx].accessPassword !== undefined
+                ? templates[existingIdx].accessPassword
+                : tplData.accessPassword;
+              templates[existingIdx] = {
+                ...tplData,
+                accessLevel: keepAccess,
+                accessPassword: keepPass
+              };
+            } else {
+              templates.push(tplData);
+            }
+            addedOrUpdated++;
+          } catch (innerErr) {
+            console.warn(`개별 양식 로드 실패 (${filePath}):`, innerErr);
+          }
+        }
+
+        if (addedOrUpdated > 0) {
+          saveTemplates();
+          renderTemplateSelector();
+          if (templates[currentTemplateIndex]) {
+            selectTemplate(currentTemplateIndex);
+          } else if (getVisibleTemplateIndices().length > 0) {
+            selectTemplate(getVisibleTemplateIndices()[0]);
+          }
+        }
+        if (showAlert) {
+          alert(`✅ 외부 templates 폴더에서 총 ${addedOrUpdated}개의 양식을 동기화했습니다.`);
+        }
+      } catch (err) {
+        if (showAlert) {
+          alert('외부 DB 동기화 실패: 로컬 파일(file://) 환경이거나 ./templates/index.json 파일이 없습니다.');
+        }
+      }
+    }
+
+    function saveTemplates() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
+      } catch (e) {
+        console.warn('localStorage 저장 실패:', e);
+      }
+    }
+
+    function getVisibleTemplateIndices() {
+      const indices = [];
+      templates.forEach((t, idx) => {
+        if (t.accessLevel === 'admin' && !isAdminMode) return;
+        indices.push(idx);
+      });
+      return indices;
+    }
+
+    function renderTemplateSelector() {
+      const select = document.getElementById('templateSelect');
+      const visibleIndices = getVisibleTemplateIndices();
+
+      if (visibleIndices.length === 0) {
+        select.innerHTML = `<option value="-1">표시할 수 있는 양식이 없습니다</option>`;
+        return;
+      }
+
+      select.innerHTML = visibleIndices.map(idx => {
+        const t = templates[idx];
+        const icon = t.accessLevel === 'admin' ? '🛡️ '
