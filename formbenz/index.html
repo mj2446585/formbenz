@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LawForm CLM - 계약서 자동생성 시스템</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=Noto+Serif+KR:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans KR', sans-serif; background-color: #f1f5f9; margin: 0; }
+    .doc-preview {
+      font-family: 'Noto Serif KR', '바탕', serif;
+      width: 210mm;
+      min-height: 297mm;
+      padding: 20mm;
+      margin: 0 auto;
+      background: white;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+      color: #111827;
+      line-height: 1.75;
+      font-size: 10.5pt;
+      word-break: keep-all;
+      box-sizing: border-box;
+    }
+    .doc-preview p { margin-bottom: 6px; }
+    .doc-preview .provision-header {
+      font-weight: 700;
+      margin-top: 16px;
+      margin-bottom: 4px;
+      font-size: 11pt;
+    }
+    .doc-preview .page-break {
+      page-break-before: always;
+      border-top: 2px dashed #cbd5e1;
+      margin-top: 32px;
+      padding-top: 24px;
+    }
+    .filled-var {
+      background-color: #fef08a;
+      padding: 0 3px;
+      border-radius: 2px;
+    }
+    .empty-var {
+      color: #9ca3af;
+      border-bottom: 1px dashed #9ca3af;
+      padding: 0 4px;
+    }
+    @media print {
+      body { background: white; }
+      .no-print { display: none !important; }
+      .print-container { width: 100% !important; height: auto !important; overflow: visible !important; padding: 0 !important; margin: 0 !important; }
+      .doc-preview { box-shadow: none; padding: 12mm; width: 100%; min-height: auto; }
+      .doc-preview .page-break { border-top: none; margin-top: 0; padding-top: 0; }
+      .filled-var { background-color: transparent !important; padding: 0; }
+      .empty-var { color: #111827; border-bottom: none; }
+    }
+  </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+  <!-- 상단 네비게이션 -->
+  <header class="no-print bg-slate-900 text-white px-6 py-3.5 flex items-center justify-between shadow-md z-10">
+    <div class="flex items-center space-x-4">
+      <div class="flex items-center space-x-2">
+        <span class="bg-indigo-600 text-white font-bold px-2.5 py-1 rounded text-sm">CLM</span>
+        <h1 class="text-lg font-bold tracking-tight">법률 문서 자동생성 시스템</h1>
+      </div>
+      <select id="templateSelect" onchange="selectTemplate(this.value)" class="bg-slate-800 border border-slate-700 text-sm rounded-lg px-3 py-1.5 text-white focus:outline-none">
+      </select>
+    </div>
+
+    <div class="flex items-center space-x-2">
+      <label class="cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-1.5 shadow-sm">
+        <span>📂 내 .txt / .json 양식 업로드</span>
+        <input type="file" id="fileInput" accept=".json,.txt" multiple class="hidden" onchange="handleFiles(this.files)">
+      </label>
+      <button onclick="toggleHighlight()" id="highlightBtn" class="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-600 px-3 py-1.5 rounded-lg text-sm font-medium transition">
+        ✨ 형광펜 ON
+      </button>
+      <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-1.5 rounded-lg text-sm font-medium transition shadow-sm">
+        🖨️ PDF 인쇄/저장
+      </button>
+      <button onclick="exportWord()" class="bg-blue-600 hover:bg-blue-500 text-white px-3.5 py-1.5 rounded-lg text-sm font-medium transition shadow-sm">
+        📄 Word 다운로드
+      </button>
+    </div>
+  </header>
+
+  <!-- 드래그 앤 드롭 안내 배너 -->
+  <div id="dropZone" class="no-print bg-indigo-50 border-b border-indigo-200 px-6 py-2.5 text-xs text-indigo-800 flex items-center justify-between">
+    <span>💡 <strong>가지고 계신 <code>MV_영상_콘텐츠 제작 및 편집 계약서...txt</code> 파일</strong>을 이 화면 아무 곳에나 마우스로 끌어다 놓으시면(드래그 앤 드롭) 즉시 전체 조항이 로드됩니다!</span>
+    <button onclick="clearStorageAndReset()" class="text-indigo-600 hover:underline font-semibold">저장 데이터 초기화</button>
+  </div>
+
+  <!-- 메인 작업 공간 -->
+  <main class="flex-1 flex overflow-hidden">
+    <!-- 좌측 동적 입력 패널 -->
+    <aside class="no-print w-5/12 max-w-xl bg-white border-r border-slate-200 flex flex-col h-full">
+      <div class="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div>
+          <h2 id="formTitle" class="font-bold text-slate-800 text-base">양식을 불러오는 중...</h2>
+          <p class="text-xs text-slate-500 mt-0.5">선택 옵션에 따라 하위 질문과 계약서 본문이 실시간 변경됩니다.</p>
+        </div>
+        <button onclick="clearCurrentInputs()" class="text-xs text-slate-600 hover:text-red-600 border border-slate-300 rounded px-2.5 py-1 bg-white">
+          입력값 리셋
+        </button>
+      </div>
+      <div id="inputContainer" class="flex-1 overflow-y-auto p-5 space-y-4"></div>
+    </aside>
+
+    <!-- 우측 실시간 A4 미리보기 패널 -->
+    <section class="print-container flex-1 overflow-y-auto p-8 bg-slate-200">
+      <div id="documentPreview" class="doc-preview"></div>
+    </section>
+  </main>
+
+  <!-- 안전한 JSON 데이터 보관용 태그 (복사 시 스크립트 깨짐 방지) -->
+  <script id="defaultTemplateData" type="application/json">
+  {
+    "title": "MV/영상/콘텐츠 제작 및 편집 계약서 (기본 내장)",
+    "inputSections": [
+      {
+        "title": "생성 문서",
+        "fields": [
+          {
+            "fieldtype": "obj",
+            "exampletooltip": "<p><strong># 작성 가이드</strong></p><p>1. 계약서(비밀유지서약서 포함) / 2. 발주서 / 3. 계약서+발주서</p>",
+            "objdataFields": [
+              {
+                "type": "radio",
+                "radioBinding": "clm_type1",
+                "radioFields": [{"content": "계약서"}, {"content": "발주서"}, {"content": "계약서+발주서"}]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "파트너사",
+        "fields": [
+          {
+            "caseFields": [{"bool": "true", "name": "clm_person", "value": "1"}],
+            "objdataFields": [
+              {
+                "type": "radio",
+                "radioBinding": "type1",
+                "radioFields": [{"content": "회사"}, {"content": "개인"}]
+              }
+            ]
+          },
+          {
+            "caseFields": [{"bool": "true", "name": "clm_person", "value": "2"}],
+            "objdataFields": [
+              {
+                "type": "radio",
+                "radioBinding": "type2",
+                "radioFields": [{"content": "회사"}, {"content": "개인"}]
+              }
+            ]
+          },
+          {
+            "casetype": "AND",
+            "caseFields": [{"bool": "true", "name": "type1", "value": "회사"}, {"bool": "true", "name": "clm_person", "value": "1"}],
+            "objdataFields": [{"type": "text", "textFields": [{"binding": "name1", "placeholder": "업체명 입력", "immovableLeftText": "업체명"}]}]
+          },
+          {
+            "casetype": "AND",
+            "caseFields": [{"bool": "true", "name": "type1", "value": "개인"}, {"bool": "true", "name": "clm_person", "value": "1"}],
+            "objdataFields": [{"type": "text", "textFields": [{"binding": "name1", "placeholder": "성명 입력", "immovableLeftText": "성명"}]}]
+          },
+          {
+            "casetype": "AND",
+            "caseFields": [{"bool": "true", "name": "type2", "value": "회사"}, {"bool": "true", "name": "clm_person", "value": "2"}],
+            "objdataFields": [{"type": "text", "textFields": [{"binding": "name2", "placeholder": "업체명 입력", "immovableLeftText": "업체명"}]}]
+          },
+          {
+            "casetype": "AND",
+            "caseFields": [{"bool": "true", "name": "type2", "value": "개인"}, {"bool": "true", "name": "clm_person", "value": "2"}],
+            "objdataFields": [{"type": "text", "textFields": [{"binding": "name2", "placeholder": "성명 입력", "immovableLeftText": "성명"}]}]
+          }
+        ]
+      },
+      {
+        "title": "계약기간 및 검수",
+        "fields": [
+          {
+            "caseFields": [{"bool": "true", "name": "clm_type1", "value": "계약서"}, {"bool": "true", "name": "clm_type1", "value": "계약서+발주서"}],
+            "objdataFields": [{"type": "text", "textFields": [{"binding": "con_peri", "placeholder": "1년", "immovableLeftText": "계약 체결일로부터"}]}]
+          },
+          {
+            "title": "계약 자동연장",
+            "caseFields": [{"bool": "true", "name": "clm_type1", "value": "계약서"}, {"bool": "true", "name": "clm_type1", "value": "계약서+발주서"}],
+            "objdataFields": [{"type": "radio", "radioBinding": "clm_renew", "radioFields": [{"content": "자동연장 함"}, {"content": "자동연장 하지 않음"}]}]
+          },
+          {
+            "title": "검수 기한",
+            "caseFields": [{"bool": "true", "name": "clm_type1", "value": "계약서"}, {"bool": "true", "name": "clm_type1", "value": "계약서+발주서"}],
+            "objdataFields": [{"type": "text", "textFields": [{"binding": "check", "placeholder": "10", "immovableLeftText": "납품일로부터", "immovableRightText": "일 이내"}]}]
+          }
+        ]
+      },
+      {
+        "title": "계좌 정보",
+        "fields": [
+          {
+            "caseFields": [{"bool": "true", "name": "clm_type1", "value": "계약서"}, {"bool": "true", "name": "clm_type1", "value": "계약서+발주서"}],
+            "objdataFields": [
+              {"type": "text", "textFields": [{"binding": "bank_name", "placeholder": "금융기관 입력", "immovableLeftText": "금융기관"}]},
+              {"type": "text", "textFields": [{"binding": "bank_acco", "placeholder": "계좌번호 입력", "immovableLeftText": "계좌번호"}]}
+            ]
+          }
+        ]
+      },
+      {
+        "title": "본건 영상/콘텐츠 및 위탁업무",
+        "fields": [
+          {
+            "caseFields": [{"bool": "true", "name": "clm_type1", "value": "발주서"}, {"bool": "true", "name": "clm_type1", "value": "계약서+발주서"}],
+            "objdataFields": [
+              {"type": "text", "textFields": [{"binding": "compo", "placeholder": "티저 1편, 본편 1편", "immovableLeftText": "구성"}]},
+              {"type": "text", "textFields": [{"binding": "dateplace", "placeholder": "미정 또는 추후 협의", "immovableLeftText": "촬영일시/장소"}]},
+              {"type": "text", "textFields": [{"binding": "whatwork", "placeholder": "3D 모션 그래픽 작업", "immovableLeftText": "수행작업"}]},
+              {"type": "text", "textFields": [{"binding": "kk", "placeholder": "4K", "immovableLeftText": "사양"}]},
+              {"type": "text", "textFields": [{"binding": "standard", "placeholder": "FHD (1920X1080)", "immovableLeftText": "제작 규격"}]},
+              {"type": "text", "textFields": [{"binding": "etc", "placeholder": "영어 및 일본어 자막 포함", "immovableLeftText": "기타 사항"}]}
+            ]
+          }
+        ]
+      },
+      {
+        "title": "납품기한 및 계약금액",
+        "fields": [
+          {
+            "title": "납품기한",
+            "caseFields": [{"bool": "true", "name": "clm_type1", "value": "발주서"}, {"bool": "true", "name": "clm_type1", "value": "계약서+발주서"}],
+            "objdataFields": [{"type": "calendar", "calendar_Binding": "duedate", "calendar_placeholder": "2026. 12. 31."}]
+          },
+          {
+            "casetype": "OR",
+            "caseFields": [{"bool": "true", "name": "clm_type1", "value": "발주서"}, {"bool": "true", "name": "clm_type1", "value": "계약서+발주서"}],
+            "objdataFields": [
+              {
+                "type": "radio",
+                "radioBinding": "tax",
+                "radioFields": [{"content": "부가세 입력"}, {"content": "원천징수 3.3% 공제"}]
+              }
+            ]
+          },
+          {
+            "caseFields": [{"bool": "true", "name": "tax", "value": "부가세 입력"}],
+            "objdataFields": [
+              {"type": "text", "textFields": [{"binding": "clm_pay", "currency": true, "placeholder": "1,000,000", "immovableLeftText": "계약금액(제작비)", "immovableRightText": "원정"}]},
+              {"type": "text", "textFields": [{"binding": "clm_vat_pay", "currency": true, "placeholder": "100,000", "immovableLeftText": "부가가치세", "immovableRightText": "원정"}]},
+              {"type": "text", "textFields": [{"binding": "clm_total_pay", "currency": true, "immovableLeftText": "지급 총액", "immovableRightText": "원정"}]}
+            ]
+          },
+          {
+            "caseFields": [{"bool": "true", "name": "tax", "value": "원천징수 3.3% 공제"}],
+            "objdataFields": [
+              {"type": "text", "textFields": [{"binding": "clm_pay_once_1", "currency": true, "placeholder": "1,000,000", "immovableLeftText": "계약금액(제작비)", "immovableRightText": "원정"}]},
+              {"type": "text", "textFields": [{"binding": "clm_vat_pay_1", "currency": true, "immovableLeftText": "3.3% 공제액", "immovableRightText": "원정"}]},
+              {"type": "text", "textFields": [{"binding": "clm_total_pay_1", "currency": true, "immovableLeftText": "지급 총액", "immovableRightText": "원정"}]}
+            ]
+          },
+          {
+            "title": "지급일",
+            "objdataFields": [{"type": "text", "textFields": [{"binding": "clm_pay_once_date", "placeholder": "최종 납품일로부터 30일 이내"}]}]
+          }
+        ]
+      },
+      {
+        "title": "계약 체결일 및 파트너사 상세정보",
+        "fields": [
+          {
+            "title": "계약 체결일",
+            "caseFields": [{"bool": "true", "name": "clm_type1", "value": "계약서"}, {"bool": "true", "name": "clm_type1", "value": "계약서+발주서"}],
+            "objdataFields": [{"type": "calendar", "calendar_Binding": "clm_con_date", "calendar_placeholder": "2026. 12. 31."}]
+          },
+          {
+            "title": "대표자",
+            "casetype": "AND",
+            "caseFields": [{"bool": "true", "name": "type1", "value": "회사"}, {"bool": "true", "name": "clm_person", "value": "1"}],
+            "objdataFields": [{"type": "text", "textFields": [{"binding": "ceo1", "placeholder": "대표자명 입력"}]}]
+          },
+          {
+            "title": "생년월일",
+            "caseFields": [{"bool": "true", "name": "type1", "value": "개인"}],
+            "objdataFields": [{"type": "text", "textFields": [{"binding": "rrn1", "placeholder": "생년월일 입력"}]}]
+          },
+          {
+            "title": "주소",
+            "caseFields": [{"bool": "true", "name": "type1", "value": "회사"}, {"bool": "true", "name": "type1", "value": "개인"}],
+            "objdataFields": [{"type": "address", "addressBinding": "addr1_1", "addressDetailBinding": "addr1_2"}]
+          }
+        ]
+      }
+    ],
+    "outputSections": [
+      {
+        "casetype": "OR",
+        "caseFields": [{"name": "clm_type1", "value": "계약서"}, {"name": "clm_type1", "value": "계약서+발주서"}],
+        "law_text": "<p style='text-align: center;'><strong><span style='font-size: 18px;'>MV/영상/콘텐츠 제작 및 편집 계약서</span></strong></p><p>&nbsp;</p>"
+      },
+      {
+        "law_text": "<p>주식회사 블루개러지 (이하 ‘블루개러지’라 한다)와 {{name1}} (이하 ‘파트너사’라 한다)는 블루개러지가 지정하는 자(이하, '아티스트'라 한다)의 활동과 관련된 영상물의 제작함에 있어 다음과 같이 계약을 체결하고 이를 성실히 이행하기로 약정한다.</p>"
+      },
+      {
+        "caseFields": [{"name": "clm_person", "value": "1"}],
+        "provision_title": "계약의 목적",
+        "law_text": "<p>본 계약의 목적은 ‘블루개러지’가 ‘파트너사’에게 아티스트의 활동과 관련된 영상물의 (이하 ‘본건 영상/콘텐츠’라고 함) 제작을 의뢰하고 ‘파트너사’가 이를 제작하여 ‘블루개러지’에게 납품함에 있어 양 당사자 간의 권리와 의무를 명백히 함에 있다.</p>"
+      },
+      {
+        "caseFields": [{"name": "clm_renew", "value": "자동연장 함"}],
+        "provision_title": "계약기간",
+        "law_text": "<p>1. 본 계약 기간은 계약 체결일로부터 {{con_peri}}으로 한다.</p><p>2. 계약기간 종료일 60일 전까지 서면에 의한 갱신거절 의사 표시를 하지 아니할 경우 동일한 조건으로 1년씩 자동 연장된다.</p>"
+      },
+      {
+        "caseFields": [{"name": "clm_renew", "value": "자동연장 하지 않음"}],
+        "provision_title": "계약기간",
+        "law_text": "<p>본 계약 기간은 계약 체결일로부터 {{con_peri}}으로 한다.</p>"
+      },
+      {
+        "caseFields": [{"name": "clm_person", "value": "1"}],
+        "provision_title": "납품 및 검수",
+        "law_text": "<p>1. ‘블루개러지’는 납품일로부터 {{check}}일 이내에 본건 영상/콘텐츠를 검수하여야 한다.</p><p>2. ‘블루개러지’는 납품일로부터 {{check}}일 이내에 검사결과를 ‘파트너사’에게 통지하여야 한다.</p>"
+      },
+      {
+        "provision_title": "대금의 지급 및 조정",
+        "law_text": "<p>1. ‘본건 영상/콘텐츠’의 대금은 별첨 1. 발주서에서 정하는 바에 의한다.</p><p>2. 최종 납품일로부터 30일 내에 지정 계좌로 현금 지급한다.<br />- 금융기관 : {{bank_name}}<br />- 계좌번호 : {{bank_acco}}</p>"
+      },
+      {
+        "law_text": "<p>&nbsp;</p><p style='text-align: center;'><span style='font-size: 16px;'>{{clm_con_date}}</span></p><p>&nbsp;</p>"
+      },
+      {
+        "caseFields": [{"name": "clm_person", "value": "1"}],
+        "padding_top": 20,
+        "law_text": "<p><strong>블루개러지</strong></p><p>주식회사 블루개러지 / 서울특별시 강동구 성안로 7-13, 2층</p><p>대표이사 피현식, 정민종 (인)</p>"
+      },
+      {
+        "casetype": "AND",
+        "caseFields": [{"name": "type1", "value": "회사"}, {"name": "clm_person", "value": "1"}],
+        "padding_top": 20,
+        "law_text": "<p><strong>파트너사</strong></p><p>상호 : {{name1}}</p><p>주소 : {{addr1_1}} {{addr1_2}}</p><p>대표자 : {{ceo1}} (인)</p>"
+      },
+      {
+        "casetype": "AND",
+        "caseFields": [{"name": "type1", "value": "개인"}, {"name": "clm_person", "value": "1"}],
+        "padding_top": 20,
+        "law_text": "<p><strong>파트너사</strong></p><p>주소 : {{addr1_1}} {{addr1_2}}</p><p>생년월일 : {{rrn1}}</p><p>성명 : {{name1}} (인)</p>"
+      },
+      {
+        "caseFields": [{"name": "clm_type1", "value": "계약서+발주서"}],
+        "law_text": "<p class='page-break'>&nbsp;</p><p>별첨 1.</p><p style='text-align: center;'><strong><span style='font-size: 16px;'>발 주 서</span></strong></p>"
+      },
+      {
+        "caseFields": [{"name": "clm_type1", "value": "발주서"}],
+        "law_text": "<p>별첨 1.</p><p style='text-align: center;'><strong><span style='font-size: 18px;'>발 주 서</span></strong></p>"
+      },
+      {
+        "casetype": "OR",
+        "caseFields": [{"name": "clm_type1", "value": "발주서"}, {"name": "clm_type1", "value": "계약서+발주서"}],
+        "law_text": "<p>1. 본건 영상/콘텐츠 및 위탁업무</p><p>가. 구성 : {{compo}}</p><p>나. 촬영일시, 장소 : {{dateplace}}</p><p>다. 수행작업 : {{whatwork}}</p><p>라. 사양 : {{kk}}</p><p>마. 제작 규격 : {{standard}}</p><p>바. 기타 사항 : {{etc}}</p><p>2. 납품기한 : {{duedate}}</p>"
+      },
+      {
+        "caseFields": [{"name": "tax", "value": "부가세 입력"}],
+        "law_text": "<p>3. 계약금액(제작비) : 금 {{clm_pay}}원정(VAT 별도)<br />- 부가가치세 : 금 {{clm_vat_pay}}원정<br />- 지급 총액 : 총 {{clm_total_pay}}원정(VAT 포함)<br />- 지급일 : {{clm_pay_once_date}}</p>"
+      },
+      {
+        "caseFields": [{"name": "tax", "value": "원천징수 3.3% 공제"}],
+        "law_text": "<p>3. 계약금액(제작비) : 금 {{clm_pay_once_1}}원정<br />- 원천징수 3.3% 공제액 : 금 {{clm_vat_pay_1}}원정<br />- 지급 총액 : 금 {{clm_total_pay_1}}원정<br />- 지급일 : {{clm_pay_once_date}}</p>"
+      }
+    ],
+    "variables": [
+      {"name": "clm_total_pay", "value": "<eval exp=\"{{clm_pay}}+{{clm_vat_pay}}\"></eval>"},
+      {"name": "clm_vat_pay_1", "value": "<eval exp=\"{{clm_pay_once_1}}*3.3/100\"></eval>"},
+      {"name": "clm_total_pay_1", "value": "<eval exp=\"{{clm_pay_once_1}} - ({{clm_pay_once_1}}*3.3/100)\"></eval>"},
+      {"name": "clm_person", "value": "<switch binding=\"clm_type1\" case1=\"계약서\" value1=\"1\" case2=\"계약서+발주서\" value2=\"1\" case3=\"발주서\" value3=\"2\"></switch>"},
+      {"name": "clm_name", "value": "<switch binding=\"clm_type1\" case1=\"계약서\" value1=\"{{name1}}\" case2=\"계약서+발주서\" value2=\"{{name1}}\" case3=\"발주서\" value3=\"{{name2}}\"></switch>"}
+    ]
+  }
+  </script>
+
+  <script>
+    const STORAGE_KEY = 'clm_lawform_templates_v3';
+    let templates = [];
+    let currentTemplateIndex = 0;
+    let formState = {};
+    let computedState = {};
+    let currencyBindings = new Set();
+    let highlightEnabled = true;
+
+    function getDefaultTemplate() {
+      try {
+        const raw = document.getElementById('defaultTemplateData').textContent;
+        return JSON.parse(raw);
+      } catch (e) {
+        console.error('기본 템플릿 로드 오류:', e);
+        return { title: '빈 양식', inputSections: [], outputSections: [], variables: [] };
+      }
+    }
+
+    function initApp() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          templates = JSON.parse(saved);
+        } catch (e) {
+          templates = [getDefaultTemplate()];
+        }
+      }
+      if (!templates || !Array.isArray(templates) || templates.length === 0) {
+        templates = [getDefaultTemplate()];
+        saveTemplates();
+      }
+      renderTemplateSelector();
+      selectTemplate(0);
+      setupDragAndDrop();
+    }
+
+    function saveTemplates() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
+      } catch (e) {
+        console.warn('localStorage 용량 초과 또는 저장 실패:', e);
+      }
+    }
+
+    function clearStorageAndReset() {
+      if (confirm('업로드한 양식을 초기화하고 기본 상태로 되돌릴까요?')) {
+        localStorage.removeItem(STORAGE_KEY);
+        templates = [getDefaultTemplate()];
+        saveTemplates();
+        renderTemplateSelector();
+        selectTemplate(0);
+      }
+    }
+
+    function renderTemplateSelector() {
+      const select = document.getElementById('templateSelect');
+      select.innerHTML = templates.map((t, idx) => `<option value="${idx}">${t.title || ('양식 ' + (idx + 1))}</option>`).join('');
+      select.value = currentTemplateIndex;
+    }
+
+    function selectTemplate(index) {
+      currentTemplateIndex = Number(index);
+      const tpl = templates[currentTemplateIndex];
+      if (!tpl) return;
+
+      document.getElementById('formTitle').textContent = tpl.title || '양식 작성';
+      formState = {};
+      currencyBindings = new Set();
+
+      (tpl.inputSections || []).forEach(sec => {
+        (sec.fields || []).forEach(field => {
+          (field.objdataFields || []).forEach(obj => {
+            if (obj.type === 'radio' && obj.radioBinding) {
+              if (obj.ai_default_value) {
+                formState[obj.radioBinding] = obj.ai_default_value;
+              } else if (obj.radioFields && obj.radioFields.length > 0 && formState[obj.radioBinding] === undefined) {
+                if (!field.caseFields || field.caseFields.length === 0) {
+                  formState[obj.radioBinding] = obj.radioFields[0].content;
+                }
+              }
+            }
+            (obj.textFields || []).forEach(tf => {
+              if (tf.currency) currencyBindings.add(tf.binding);
+            });
+          });
+        });
+      });
+
+      (tpl.variables || []).forEach(v => {
+        if (v.value && v.value.includes('<eval')) {
+          currencyBindings.add(v.name);
+        }
+      });
+
+      recalculateAndRender(true);
+    }
+
+    function clearCurrentInputs() {
+      selectTemplate(currentTemplateIndex);
+    }
+
+    function decodeHtmlEntities(str) {
+      if (!str) return '';
+      const txt = document.createElement('textarea');
+      txt.innerHTML = str;
+      return txt.value;
+    }
+
+    function parseNumber(val) {
+      if (val === undefined || val === null || val === '') return 0;
+      const cleaned = String(val).replace(/,/g, '').trim();
+      const num = parseFloat(cleaned);
+      return isNaN(num) ? 0 : num;
+    }
+
+    function formatCurrency(num) {
+      if (num === undefined || num === null || num === '' || isNaN(num)) return '';
+      return Math.round(Number(num)).toLocaleString('ko-KR');
+    }
+
+    function resolveSwitchTags(rawStr, stateObj) {
+      if (!rawStr) return '';
+      return rawStr.replace(/<switch\s+([^>]+)><\/switch>/gi, (match, attrStr) => {
+        const attrs = {};
+        const attrRegex = /(\w+)="([^"]*)"/g;
+        let m;
+        while ((m = attrRegex.exec(attrStr)) !== null) {
+          attrs[m[1]] = decodeHtmlEntities(m[2]);
+        }
+        const bindKey = attrs.binding;
+        const currentVal = decodeHtmlEntities(String(stateObj[bindKey] || '')).trim();
+
+        for (let i = 1; i <= 10; i++) {
+          if (attrs[`case${i}`] !== undefined) {
+            const caseVal = attrs[`case${i}`].trim();
+            const normCurrent = currentVal.replace(/['’‘]/g, "'");
+            const normCase = caseVal.replace(/['’‘]/g, "'");
+            if (normCurrent && normCurrent === normCase) {
+              return replacePlaceholders(attrs[`value${i}`] || '', stateObj, false);
+            }
+          }
+        }
+        return '';
+      });
+    }
+
+    function resolveEvalTags(rawStr, stateObj) {
+      if (!rawStr) return '';
+      return rawStr.replace(/<eval\s+exp="([^"]*)"><\/eval>/gi, (match, expStr) => {
+        let hasAnyInput = false;
+        const parsedExp = expStr.replace(/\{\{([^}]+)\}\}/g, (_, varName) => {
+          const v = stateObj[varName.trim()];
+          if (v !== undefined && v !== '') hasAnyInput = true;
+          return parseNumber(v);
+        });
+        if (!hasAnyInput) return '';
+        try {
+          const result = Function('"use strict"; return (' + parsedExp + ')')();
+          return isFinite(result) ? formatCurrency(result) : '';
+        } catch (e) {
+          return '';
+        }
+      });
+    }
+
+    function replacePlaceholders(str, stateObj, forPreview = false) {
+      if (!str) return '';
+      return str.replace(/\{\{([^}]+)\}\}/g, (match, varName) => {
+        const key = varName.trim();
+        let val = stateObj[key];
+        if (val !== undefined && val !== null && String(val).trim() !== '') {
+          if (currencyBindings.has(key)) {
+            const num = parseNumber(val);
+            val = formatCurrency(num);
+          }
+          if (forPreview && highlightEnabled) {
+            return `<span class="filled-var">${val}</span>`;
+          }
+          return val;
+        }
+        return forPreview ? `<span class="empty-var">[${key}]</span>` : '';
+      });
+    }
+
+    function computeVariables() {
+      const tpl = templates[currentTemplateIndex];
+      computedState = { ...formState };
+      if (!tpl) return;
+
+      for (let pass = 0; pass < 2; pass++) {
+        (tpl.variables || []).forEach(v => {
+          let val = v.value || '';
+          val = resolveSwitchTags(val, computedState);
+          val = resolveEvalTags(val, computedState);
+          val = replacePlaceholders(val, computedState, false);
+          if ((v.value && (v.value.includes('<eval') || v.value.includes('<switch'))) || !formState[v.name]) {
+            computedState[v.name] = val;
+          }
+        });
+      }
+
+      (tpl.inputSections || []).forEach(sec => {
+        (sec.fields || []).forEach(field => {
+          if (evaluateCase(field.caseFields, field.casetype, computedState)) {
+            (field.objdataFields || []).forEach(obj => {
+              if (obj.type === 'radio' && obj.radioBinding && !computedState[obj.radioBinding]) {
+                if (obj.ai_default_value) {
+                  formState[obj.radioBinding] = obj.ai_default_value;
+                  computedState[obj.radioBinding] = obj.ai_default_value;
+                } else if (obj.radioFields && obj.radioFields.length > 0) {
+                  formState[obj.radioBinding] = obj.radioFields[0].content;
+                  computedState[obj.radioBinding] = obj.radioFields[0].content;
+                }
+              }
+            });
+          }
+        });
+      });
+
+      (tpl.variables || []).forEach(v => {
+        if (v.value && (v.value.includes('<switch') || v.value.includes('<eval'))) {
+          let val = resolveSwitchTags(v.value, computedState);
+          val = resolveEvalTags(val, computedState);
+          val = replacePlaceholders(val, computedState, false);
+          computedState[v.name] = val;
+        }
+      });
+    }
+
+    function evaluateCase(caseFields, casetype, stateObj) {
+      if (!caseFields || caseFields.length === 0) return true;
+      const names = caseFields.map(c => c.name);
+      const hasDuplicateNames = new Set(names).size !== names.length;
+      const effectiveType = (casetype || (hasDuplicateNames ? 'OR' : 'AND')).toUpperCase();
+
+      const checkSingle = (cf) => {
+        const currentVal = String(stateObj[cf.name] || '').trim();
+        if (cf.value === undefined || cf.value === null || cf.value === '') {
+          return currentVal !== '';
+        }
+        const targetVal = String(cf.value).trim();
+        const isMatch = currentVal.replace(/['’‘]/g, "'") === targetVal.replace(/['’‘]/g, "'");
+        return cf.bool === 'false' ? !isMatch : isMatch;
+      };
+
+      if (effectiveType === 'AND' && !hasDuplicateNames) {
+        return caseFields.every(checkSingle);
+      } else {
+        return caseFields.some(checkSingle);
+      }
+    }
+
+    function renderInputSections() {
+      const tpl = templates[currentTemplateIndex];
+      const container = document.getElementById('inputContainer');
+      if (!tpl || !tpl.inputSections) {
+        container.innerHTML = '<p class="text-sm text-slate-400">입력 섹션이 없습니다.</p>';
+        return;
+      }
+
+      let html = '';
+      tpl.inputSections.forEach((sec, secIdx) => {
+        const visibleFields = (sec.fields || []).filter(f => evaluateCase(f.caseFields, f.casetype, computedState));
+        if (visibleFields.length === 0) return;
+
+        const tooltipHtml = sec.guidetooltip || sec.exampletooltip || '';
+        html += `
+          <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-sm">
+            <div class="flex items-center justify-between mb-3 pb-2 border-b border-slate-200">
+              <h3 class="font-bold text-slate-800 text-sm flex items-center space-x-1.5">
+                <span class="w-2 h-2 rounded-full bg-indigo-600 inline-block"></span>
+                <span>${sec.title || '입력 항목'}</span>
+              </h3>
+            </div>
+            ${tooltipHtml ? `<div class="mb-3 p-2.5 bg-indigo-50/70 border border-indigo-100 rounded-lg text-xs text-slate-600">${tooltipHtml}</div>` : ''}
+            <div class="space-y-3.5">
+        `;
+
+        visibleFields.forEach((field, fIdx) => {
+          if (field.title) {
+            html += `<div class="text-xs font-semibold text-slate-700 mt-2">${field.title}</div>`;
+          }
+          if (field.exampletooltip) {
+            html += `<div class="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-slate-700 leading-relaxed">${field.exampletooltip}</div>`;
+          }
+
+          (field.objdataFields || []).forEach((obj, oIdx) => {
+            if (obj.type === 'radio' && obj.radioFields) {
+              const bind = obj.radioBinding;
+              const currentVal = computedState[bind] || '';
+              html += `<div class="flex flex-wrap gap-2">`;
+              obj.radioFields.forEach(rf => {
+                const content = rf.content;
+                const checked = currentVal.replace(/['’‘]/g, "'") === content.replace(/['’‘]/g, "'");
+                html += `
+                  <label class="cursor-pointer px-3 py-1.5 rounded-lg border text-xs font-medium transition flex items-center space-x-1.5 ${checked ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'}">
+                    <input type="radio" name="radio_${secIdx}_${fIdx}_${oIdx}_${bind}" value="${content.replace(/"/g, '&quot;')}" ${checked ? 'checked' : ''} onchange="handleRadioChange('${bind}', this.value)" class="hidden">
+                    <span>${content}</span>
+                  </label>
+                `;
+              });
+              html += `</div>`;
+            }
+
+            if (obj.textFields && obj.textFields.length > 0) {
+              obj.textFields.forEach(tf => {
+                const bind = tf.binding;
+                const isCalculated = (tpl.variables || []).some(v => v.name === bind && v.value && v.value.includes('<eval'));
+                const rawVal = computedState[bind] !== undefined ? computedState[bind] : '';
+                const displayVal = tf.currency && rawVal !== '' ? formatCurrency(parseNumber(rawVal)) : rawVal;
+                const isVatField = bind === 'clm_vat_pay';
+
+                html += `
+                  <div class="flex items-center space-x-2">
+                    ${tf.immovableLeftText ? `<span class="text-xs font-medium text-slate-600 w-32 shrink-0">${tf.immovableLeftText}</span>` : ''}
+                    <div class="relative flex-1 flex items-center">
+                      <input
+                        type="text"
+                        data-binding="${bind}"
+                        value="${String(displayVal).replace(/"/g, '&quot;')}"
+                        placeholder="${tf.placeholder || (isCalculated ? '자동 계산됨' : '내용 입력')}"
+                        ${isCalculated ? 'readonly' : ''}
+                        oninput="handleTextInput('${bind}', this.value, ${!!tf.currency}, this)"
+                        class="w-full px-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${isCalculated ? 'bg-slate-100 text-indigo-700 font-semibold border-slate-300' : 'bg-white border-slate-300'}"
+                      >
+                      ${isVatField ? `<button type="button" onclick="autoFillVat()" class="ml-1.5 shrink-0 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1.5 rounded-lg font-medium">10% 자동계산</button>` : ''}
+                    </div>
+                    ${tf.immovableRightText ? `<span class="text-xs text-slate-600 shrink-0">${tf.immovableRightText}</span>` : ''}
+                  </div>
+                `;
+              });
+            }
+
+            if (obj.type === 'calendar' && obj.calendar_Binding) {
+              const bind = obj.calendar_Binding;
+              const val = computedState[bind] || '';
+              html += `
+                <div class="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    data-binding="${bind}"
+                    value="${String(val).replace(/"/g, '&quot;')}"
+                    placeholder="${obj.calendar_placeholder || 'YYYY.MM.DD.'}"
+                    oninput="handleTextInput('${bind}', this.value, false, this)"
+                    class="flex-1 px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                  <input
+                    type="date"
+                    onchange="handleDatePick('${bind}', this.value)"
+                    class="px-2 py-1 text-xs border border-slate-300 rounded-lg bg-white text-slate-600 cursor-pointer"
+                  >
+                </div>
+              `;
+            }
+
+            if (obj.type === 'address') {
+              const b1 = obj.addressBinding;
+              const b2 = obj.addressDetailBinding;
+              const v1 = computedState[b1] || '';
+              const v2 = computedState[b2] || '';
+              html += `
+                <div class="space-y-2">
+                  <input
+                    type="text"
+                    data-binding="${b1}"
+                    value="${String(v1).replace(/"/g, '&quot;')}"
+                    placeholder="기본 주소 입력"
+                    oninput="handleTextInput('${b1}', this.value, false, this)"
+                    class="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                  <input
+                    type="text"
+                    data-binding="${b2}"
+                    value="${String(v2).replace(/"/g, '&quot;')}"
+                    placeholder="상세 주소 입력"
+                    oninput="handleTextInput('${b2}', this.value, false, this)"
+                    class="w-full px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                </div>
+              `;
+            }
+          });
+        });
+
+        html += `</div></div>`;
+      });
+
+      container.innerHTML = html;
+    }
+
+    function renderOutputPreview() {
+      const tpl = templates[currentTemplateIndex];
+      const preview = document.getElementById('documentPreview');
+      if (!tpl || !tpl.outputSections) {
+        preview.innerHTML = '<p class="text-slate-400 text-center mt-20">출력 섹션 데이터가 없습니다.</p>';
+        return;
+      }
+
+      let html = '';
+      let articleNumber = 1;
+
+      tpl.outputSections.forEach(sec => {
+        if (!evaluateCase(sec.caseFields, sec.casetype, computedState)) return;
+
+        const paddingTop = sec.padding_top ? `style="padding-top: ${sec.padding_top}px;"` : '';
+        html += `<div ${paddingTop}>`;
+
+        if (sec.provision_title) {
+          html += `<div class="provision-header">제${articleNumber}조 (${sec.provision_title})</div>`;
+          articleNumber++;
+        }
+
+        let content = sec.law_text || '';
+        content = resolveSwitchTags(content, computedState);
+        content = resolveEvalTags(content, computedState);
+        content = replacePlaceholders(content, computedState, true);
+
+        html += content;
+        html += `</div>`;
+      });
+
+      preview.innerHTML = html;
+    }
+
+    function handleRadioChange(binding, value) {
+      formState[binding] = value;
+      recalculateAndRender(true);
+    }
+
+    function handleTextInput(binding, value, isCurrency, inputEl) {
+      if (isCurrency) {
+        const numeric = value.replace(/[^0-9.-]/g, '');
+        formState[binding] = numeric ? formatCurrency(numeric) : '';
+        inputEl.value = formState[binding];
+      } else {
+        formState[binding] = value;
+      }
+      computeVariables();
+      syncInputValues(inputEl);
+      renderOutputPreview();
+    }
+
+    function autoFillVat() {
+      const supply = parseNumber(formState['clm_pay']);
+      if (supply > 0) {
+        formState['clm_vat_pay'] = formatCurrency(Math.round(supply * 0.1));
+        recalculateAndRender(true);
+      } else {
+        alert('먼저 계약금액(제작비)을 입력해주세요.');
+      }
+    }
+
+    function handleDatePick(binding, isoDate) {
+      if (!isoDate) return;
+      const parts = isoDate.split('-');
+      formState[binding] = `${parts[0]}. ${Number(parts[1])}. ${Number(parts[2])}.`;
+      recalculateAndRender(true);
+    }
+
+    function syncInputValues(activeInputEl) {
+      document.querySelectorAll('#inputContainer input[data-binding]').forEach(el => {
+        if (el === activeInputEl) return;
+        const bind = el.getAttribute('data-binding');
+        if (computedState[bind] !== undefined) {
+          el.value = computedState[bind];
+        }
+      });
+    }
+
+    function recalculateAndRender(rebuildInputs = false) {
+      computeVariables();
+      if (rebuildInputs) {
+        renderInputSections();
+      } else {
+        syncInputValues(null);
+      }
+      renderOutputPreview();
+    }
+
+    function toggleHighlight() {
+      highlightEnabled = !highlightEnabled;
+      const btn = document.getElementById('highlightBtn');
+      btn.textContent = highlightEnabled ? '✨ 형광펜 ON' : '✨ 형광펜 OFF';
+      renderOutputPreview();
+    }
+
+    function handleFiles(files) {
+      if (!files || files.length === 0) return;
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            let text = e.target.result.trim();
+            // 앞뒤 불필요한 BOM 또는 공백 제거
+            const firstBrace = text.indexOf('{');
+            const lastBrace = text.lastIndexOf('}');
+            if (firstBrace !== -1 && lastBrace !== -1) {
+              text = text.substring(firstBrace, lastBrace + 1);
+            }
+            const json = JSON.parse(text);
+            if (!json.inputSections && !json.outputSections) {
+              alert(`[${file.name}] 올바른 양식 파일이 아닙니다.`);
+              return;
+            }
+            if (!json.title) {
+              json.title = file.name.replace(/\.(json|txt)$/i, '');
+            }
+            templates.push(json);
+            saveTemplates();
+            renderTemplateSelector();
+            selectTemplate(templates.length - 1);
+            alert(`✅ '${json.title}' 양식이 성공적으로 업로드되었습니다!`);
+          } catch (err) {
+            alert(`[${file.name}] 파일 읽기 오류: ${err.message}`);
+          }
+        };
+        reader.readAsText(file, 'UTF-8');
+      });
+    }
+
+    function setupDragAndDrop() {
+      window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        document.getElementById('dropZone').classList.add('bg-indigo-200');
+      });
+      window.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        document.getElementById('dropZone').classList.remove('bg-indigo-200');
+      });
+      window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        document.getElementById('dropZone').classList.remove('bg-indigo-200');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          handleFiles(e.dataTransfer.files);
+        }
+      });
+    }
+
+    function exportWord() {
+      const tpl = templates[currentTemplateIndex];
+      const title = (tpl && tpl.title) ? tpl.title : '계약서';
+      const clone = document.getElementById('documentPreview').cloneNode(true);
+
+      clone.querySelectorAll('.filled-var').forEach(el => {
+        el.replaceWith(document.createTextNode(el.textContent));
+      });
+      clone.querySelectorAll('.page-break').forEach(el => {
+        const br = document.createElement('br');
+        br.setAttribute('clear', 'all');
+        br.style.pageBreakBefore = 'always';
+        el.replaceWith(br);
+      });
+
+      const wordHtml = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office'
+              xmlns:w='urn:schemas-microsoft-com:office:word'
+              xmlns='http://www.w3.org/TR/REC-html40'>
+        <head>
+          <meta charset="utf-8">
+          <title>${title}</title>
+          <style>
+            @page { size: 21cm 29.7cm; margin: 2cm; }
+            body { font-family: '바탕', 'Batang', '맑은 고딕', serif; font-size: 10.5pt; line-height: 1.7; color: #000; }
+            p { margin: 0 0 6pt 0; }
+            .provision-header { font-weight: bold; font-size: 11pt; margin-top: 14pt; margin-bottom: 4pt; }
+          </style>
+        </head>
+        <body>${clone.innerHTML}</body>
+        </html>
+      `;
+
+      const blob = new Blob(['\ufeff', wordHtml], { type: 'application/msword;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${title}_${new Date().toISOString().slice(0,10)}.doc`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    window.addEventListener('DOMContentLoaded', initApp);
+  </script>
+</body>
+</html>
